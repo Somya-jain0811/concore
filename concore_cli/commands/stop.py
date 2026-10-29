@@ -4,7 +4,7 @@ import subprocess
 import sys
 from rich.panel import Panel
 
-from concore_cli.commands._process_match import is_concore_process
+from .process_utils import is_concore_study_process, _load_registered_pids
 
 
 def stop_all(console):
@@ -12,6 +12,7 @@ def stop_all(console):
 
     processes_to_kill = []
     current_pid = os.getpid()
+    registered_pids = _load_registered_pids()
 
     try:
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
@@ -26,7 +27,8 @@ def stop_all(console):
                 except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
                     cwd = None
 
-                if is_concore_process(cmdline, cwd):
+                # strict check — won't match editors or git touching concore files
+                if is_concore_study_process(proc.info, registered_pids, cwd):
                     processes_to_kill.append(proc)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 # Process already exited or access denied; continue

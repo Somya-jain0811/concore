@@ -4,7 +4,7 @@ from rich.table import Table
 from rich.panel import Panel
 from datetime import datetime
 
-from concore_cli.commands._process_match import is_concore_process
+from .process_utils import is_concore_study_process, _load_registered_pids
 
 
 def show_status(console):
@@ -14,6 +14,7 @@ def show_status(console):
 
     try:
         current_pid = os.getpid()
+        registered_pids = _load_registered_pids()
 
         for proc in psutil.process_iter(
             ["pid", "name", "cmdline", "create_time", "memory_info", "cpu_percent"]
@@ -24,14 +25,13 @@ def show_status(console):
                 if proc.info["pid"] == current_pid:
                     continue
 
-                cmdline_str = " ".join(cmdline) if cmdline else ""
-
                 try:
                     cwd = proc.cwd()
                 except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
                     cwd = None
 
-                if is_concore_process(cmdline, cwd):
+                # strict check — won't match editors or git touching concore files
+                if is_concore_study_process(proc.info, registered_pids, cwd):
                     try:
                         create_time = datetime.fromtimestamp(proc.info["create_time"])
                         uptime = datetime.now() - create_time
@@ -49,8 +49,9 @@ def show_status(console):
                         # Failed to get memory info
                         mem_str = "unknown"
 
+                    cmdline_joined = " ".join(cmdline) if cmdline else ""
                     command = (
-                        " ".join(cmdline[:3]) if len(cmdline) >= 3 else cmdline_str[:50]
+                        " ".join(cmdline[:3]) if len(cmdline) >= 3 else cmdline_joined[:50]
                     )
 
                     concore_processes.append(
